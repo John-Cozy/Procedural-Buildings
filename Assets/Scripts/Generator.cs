@@ -34,6 +34,7 @@ public class Generator : MonoBehaviour {
         public Direction direction;
         public Room roomStart;
         public Room roomEnd;
+        public bool isDoorValid;
         public float doorPosition;
     }
 
@@ -53,8 +54,8 @@ public class Generator : MonoBehaviour {
                 Direction dest = (Direction) RandomNumber(0, 3);
 
                 // Preliminary checks
-                if (adjacentRoom.RoomAlreadyInDirection(dest)) continue;  // Checking if room already present in direction
-                if (adjacentRoom.RoomTooCloseToSide(dest)) continue;      // Checking if room is up against the sides of the plot in that direction
+                if (adjacentRoom.IsAdjacentRoomInDirection(dest)) continue; // Checking if room already present in direction
+                if (adjacentRoom.IsRoomTooCloseToSide(dest))      continue; // Checking if room is up against the sides of the plot in that direction
 
                 float width, height, left, right, top, bottom;
                 float xPos, yPos;
@@ -69,7 +70,7 @@ public class Generator : MonoBehaviour {
                     bottom = adjacentRoom.bottom;
 
                     if (dest == Direction.LEFT) {
-                        width = RandomNumber(MinRoomSize, adjacentRoom.left - MaxRoomSize < 0 ? adjacentRoom.left : RandomNumber(MinRoomSize, MaxRoomSize));
+                        width = RandomNumber(MinRoomSize, adjacentRoom.left - MaxRoomSize < 0 ? adjacentRoom.left : MaxRoomSize);
                         xPos = adjacentRoom.left - (width / 2);
 
                         left = adjacentRoom.left - width;
@@ -78,7 +79,7 @@ public class Generator : MonoBehaviour {
                         adjacentRoom.leftR = true;
                         rightR = true;
                     } else {
-                        width = RandomNumber(MinRoomSize, adjacentRoom.right + MaxRoomSize > GetPlotWidth() ? GetPlotWidth() - adjacentRoom.right : RandomNumber(MinRoomSize, MaxRoomSize));
+                        width = RandomNumber(MinRoomSize, adjacentRoom.right + MaxRoomSize > GetPlotWidth() ? GetPlotWidth() - adjacentRoom.right : MaxRoomSize);
                         xPos = adjacentRoom.right + (width / 2);
 
                         left = adjacentRoom.right;
@@ -104,7 +105,8 @@ public class Generator : MonoBehaviour {
                         adjacentRoom.topR = true;
                         bottomR = true;
                     } else {
-                        height = RandomNumber(MinRoomSize, adjacentRoom.bottom + MaxRoomSize > GetPlotHeight() ? GetPlotHeight() - adjacentRoom.bottom : RandomNumber(MinRoomSize, MaxRoomSize));
+
+                        height = RandomNumber(MinRoomSize, adjacentRoom.bottom + MaxRoomSize > GetPlotHeight() ? GetPlotHeight() - adjacentRoom.bottom : MaxRoomSize);
                         yPos = adjacentRoom.bottom + (height / 2);
 
                         top = adjacentRoom.bottom;
@@ -141,7 +143,27 @@ public class Generator : MonoBehaviour {
             }
         }
 
-        public bool RoomAlreadyInDirection(Direction dest) {
+        public bool IsNonAdjacentRoomInDirection(Direction dest) {
+            foreach (Room nextRoom in rooms[floor]) {
+                switch (dest) {
+                    case Direction.LEFT:
+                        if (left > nextRoom.right && nextRoom.top < bottom && top < nextRoom.bottom) return true;
+                        break;
+                    case Direction.RIGHT:
+                        if (right < nextRoom.left && nextRoom.top < bottom && top < nextRoom.bottom) return true;
+                        break;
+                    case Direction.UP:
+                        if (top < nextRoom.bottom && nextRoom.right > left && right > nextRoom.left) return true;
+                        break;
+                    case Direction.DOWN:
+                        if (bottom > nextRoom.top && nextRoom.right > left && right > nextRoom.left) return true;
+                        break;
+                }
+            }
+            return false;
+        }
+
+        public bool IsAdjacentRoomInDirection(Direction dest) {
             switch (dest) {
                 case Direction.LEFT:
                     return leftR;
@@ -156,7 +178,7 @@ public class Generator : MonoBehaviour {
             return false;
         }
 
-        public bool RoomTooCloseToSide(Direction dest) {
+        public bool IsRoomTooCloseToSide(Direction dest) {
             switch (dest) {
                 case Direction.LEFT:
                     return left - MinRoomSize - 1 < 0 ? true : false;
@@ -175,58 +197,55 @@ public class Generator : MonoBehaviour {
             foreach (Room nextRoom in rooms[floor]) {
                 // Check that the walls are lined up and that the rooms are adjacent to one another
                 if (nextRoom.bottom == top && nextRoom.right > left && right > nextRoom.left) {
-                    float doorPosition = GenerateDoorPosition(left > nextRoom.left ? left : nextRoom.left, right < nextRoom.right ? right : nextRoom.right);
-
+                    AddConnection(nextRoom, Direction.UP);
+                    
                     topR = true;
                     nextRoom.bottomR = true;
 
-                    connections[floor].Add(new RoomConnection {
-                        direction = Direction.UP,
-                        roomStart = this,
-                        roomEnd = nextRoom,
-                        doorPosition = doorPosition
-                    });
-
                 } else if (nextRoom.top == bottom && nextRoom.right > left && right > nextRoom.left) {
-                    float doorPosition = GenerateDoorPosition(left > nextRoom.left ? left : nextRoom.left, right < nextRoom.right ? right : nextRoom.right);
-
+                    AddConnection(nextRoom, Direction.DOWN);
+                    
                     bottomR = true;
                     nextRoom.topR = true;
 
-                    connections[floor].Add(new RoomConnection {
-                        direction = Direction.DOWN,
-                        roomStart = this,
-                        roomEnd = nextRoom,
-                        doorPosition = doorPosition
-                    });
-
                 } else if (nextRoom.right == left && nextRoom.top < bottom && top < nextRoom.bottom) {
-                    float doorPosition = GenerateDoorPosition(top > nextRoom.top ? top : nextRoom.top, bottom < nextRoom.bottom ? bottom : nextRoom.bottom);
+                    AddConnection(nextRoom, Direction.LEFT);
 
                     leftR = true;
                     nextRoom.rightR = true;
 
-                    connections[floor].Add(new RoomConnection {
-                        direction = Direction.LEFT,
-                        roomStart = this,
-                        roomEnd = nextRoom,
-                        doorPosition = doorPosition
-                    });
-
                 } else if (nextRoom.left == right && nextRoom.top < bottom && top < nextRoom.bottom) {
-                    float doorPosition = GenerateDoorPosition(top > nextRoom.top ? top : nextRoom.top, bottom < nextRoom.bottom ? bottom : nextRoom.bottom);
+                    AddConnection(nextRoom, Direction.RIGHT);
 
                     rightR = true;
                     nextRoom.leftR = true;
-
-                    connections[floor].Add(new RoomConnection {
-                        direction = Direction.RIGHT,
-                        roomStart = this,
-                        roomEnd = nextRoom,
-                        doorPosition = doorPosition
-                    });
                 }
             }
+        }
+
+        private void AddConnection(Room adjacentRoom, Direction dir) {
+
+            float lowerBound;
+            float upperBound;
+
+            if (dir == Direction.UP || dir == Direction.DOWN) {
+                lowerBound = left > adjacentRoom.left ? left : adjacentRoom.left;
+                upperBound = right < adjacentRoom.right ? right : adjacentRoom.right;
+            } else {
+                lowerBound = top > adjacentRoom.top ? top : adjacentRoom.top;
+                upperBound = bottom < adjacentRoom.bottom ? bottom : adjacentRoom.bottom;
+            }
+
+            bool isDoorValid = upperBound - lowerBound > 2;
+            float doorPosition = RandomNumber(lowerBound + 1, upperBound - 1);
+
+            connections[floor].Add(new RoomConnection {
+                direction = dir,
+                roomStart = this,
+                roomEnd = adjacentRoom,
+                isDoorValid = isDoorValid,
+                doorPosition = doorPosition
+            });
         }
 
         private bool IsConnectionAlreadyAdded(Room room) {
@@ -237,10 +256,6 @@ public class Generator : MonoBehaviour {
             }
 
             return false;
-        }
-
-        private float GenerateDoorPosition(float room1Side, float room2Side) {
-            return RandomNumber(room1Side + 1, room2Side - 1);
         }
     }
 
@@ -432,31 +447,36 @@ public class Generator : MonoBehaviour {
     private void PlaceDoors() {
         Room start = rooms[0][0];
 
-        if (start.RoomAlreadyInDirection(Direction.UP) != true) {
+        if (start.IsAdjacentRoomInDirection(Direction.UP) != true) {
             PlaceDoor(new Vector3(start.top, WallHeight, start.left + (start.width / 2)), Quaternion.Euler(0, 0, 0), true);
-        } else if (start.RoomAlreadyInDirection(Direction.DOWN) != true) {
+
+        } else if (start.IsAdjacentRoomInDirection(Direction.DOWN) != true) {
             PlaceDoor(new Vector3(start.bottom, WallHeight, start.left + (start.width / 2)), Quaternion.Euler(0, 180, 0), true);
-        } else if (start.RoomAlreadyInDirection(Direction.LEFT) != true) {
+
+        } else if (start.IsAdjacentRoomInDirection(Direction.LEFT) != true) {
             PlaceDoor(new Vector3(start.top + (start.height / 2), WallHeight, start.left), Quaternion.Euler(0, 270, 0), true);
-        } else if (start.RoomAlreadyInDirection(Direction.RIGHT) != true) {
+
+        } else if (start.IsAdjacentRoomInDirection(Direction.RIGHT) != true) {
             PlaceDoor(new Vector3(start.top + (start.height / 2), WallHeight, start.right), Quaternion.Euler(0, 90, 0), true);
         }
 
         for (int floor = 0; floor < FloorNumber; floor++) {
             foreach (RoomConnection c in connections[floor]) {
-                switch (c.direction) {
-                    case Direction.LEFT:
-                        PlaceDoor(new Vector3(c.doorPosition, WallHeight + (RoofHeight * floor), c.roomStart.left), Quaternion.Euler(0, 270, 0), false);
-                        break;
-                    case Direction.RIGHT:
-                        PlaceDoor(new Vector3(c.doorPosition, WallHeight + (RoofHeight * floor), c.roomStart.right), Quaternion.Euler(0, 90, 0), false);
-                        break;
-                    case Direction.UP:
-                        PlaceDoor(new Vector3(c.roomStart.top, WallHeight + (RoofHeight * floor), c.doorPosition), Quaternion.Euler(0, 0, 0), false);
-                        break;
-                    case Direction.DOWN:
-                        PlaceDoor(new Vector3(c.roomStart.bottom, WallHeight + (RoofHeight * floor), c.doorPosition), Quaternion.Euler(0, 180, 0), false);
-                        break;
+                if (c.isDoorValid) {
+                    switch (c.direction) {
+                        case Direction.LEFT:
+                            PlaceDoor(new Vector3(c.doorPosition, WallHeight + (RoofHeight * floor), c.roomStart.left), Quaternion.Euler(0, 270, 0), false);
+                            break;
+                        case Direction.RIGHT:
+                            PlaceDoor(new Vector3(c.doorPosition, WallHeight + (RoofHeight * floor), c.roomStart.right), Quaternion.Euler(0, 90, 0), false);
+                            break;
+                        case Direction.UP:
+                            PlaceDoor(new Vector3(c.roomStart.top, WallHeight + (RoofHeight * floor), c.doorPosition), Quaternion.Euler(0, 0, 0), false);
+                            break;
+                        case Direction.DOWN:
+                            PlaceDoor(new Vector3(c.roomStart.bottom, WallHeight + (RoofHeight * floor), c.doorPosition), Quaternion.Euler(0, 180, 0), false);
+                            break;
+                    }
                 }
             }
         }
