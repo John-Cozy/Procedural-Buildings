@@ -9,6 +9,8 @@ public class Settings : MonoBehaviour {
     public int MinRoomSize = 4, MaxRoomSize = 15;
     public int RoomNumber = 4, FloorNumber = 2;
 
+    public int OutsideDoorNumber = 1;
+
     public bool SquareRooms = false;
     public bool RoofEnabled = false;
 

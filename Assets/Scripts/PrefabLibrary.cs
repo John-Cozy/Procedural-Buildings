@@ -10,5 +10,6 @@ public class PrefabLibrary : MonoBehaviour {
     public GameObject InsideDoor;
     public GameObject Floor;
     public GameObject Corner;
+    public GameObject Stairs;
     public GameObject Roof;
 }
