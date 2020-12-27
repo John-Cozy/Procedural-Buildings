@@ -10,10 +10,10 @@ public class Settings : MonoBehaviour {
     public int RoomNumber = 4, FloorNumber = 2;
 
     public int OutsideDoorNumber = 1;
+    public int WindowNumber = 1;
 
-    public bool SquareRooms = false;
     public bool RoofEnabled = false;
-
+    public bool RandomWindowNumber = false;
 
     // Start is called before the first frame update
     void Start() {

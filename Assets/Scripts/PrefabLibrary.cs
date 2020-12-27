@@ -3,7 +3,6 @@ using UnityEngine;
 
 public class PrefabLibrary : MonoBehaviour {
     public GameObject Grass;
-    public GameObject Room;
     public GameObject Wall;
     public GameObject Window;
     public GameObject OutsideDoor;
@@ -12,4 +11,6 @@ public class PrefabLibrary : MonoBehaviour {
     public GameObject Corner;
     public GameObject Stairs;
     public GameObject Roof;
+    public GameObject RoomHolder;
+    public GameObject FloorHolder;
 }
