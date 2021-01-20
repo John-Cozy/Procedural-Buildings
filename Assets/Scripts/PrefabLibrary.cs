@@ -11,6 +11,7 @@ public class PrefabLibrary : MonoBehaviour {
     public GameObject Corner;
     public GameObject Stairs;
     public GameObject Roof;
+    public GameObject Railing;
     public GameObject RoomHolder;
     public GameObject FloorHolder;
 }

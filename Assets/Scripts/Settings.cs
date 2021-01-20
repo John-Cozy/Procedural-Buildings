@@ -10,6 +10,7 @@ public class Settings : MonoBehaviour {
     public int RoomNumber = 4, FloorNumber = 2;
 
     public int OutsideDoorNumber = 1;
+    public int BalconyRoomNumber = 1;
     public int WindowNumber = 1;
 
     public bool RoofEnabled = false;

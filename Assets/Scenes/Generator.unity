@@ -195,6 +195,7 @@ MonoBehaviour:
   Corner: {fileID: 5240584027402123326, guid: 7be17d314c0f14e449dd96842a54a7ce, type: 3}
   Stairs: {fileID: 4049001963436406586, guid: 8cffb6d077903404e83a495c47ad1461, type: 3}
   Roof: {fileID: 2028878138247328374, guid: 8d7d5538e71e6114ea4af7f8aaab940d, type: 3}
+  Railing: {fileID: 1700864455343780118, guid: 0904f4f0a2adda04fbaa2e8e68010947, type: 3}
   RoomHolder: {fileID: 625558813390785665, guid: 96b6e1f91eb2a544b8b38cfc2cb4a6d7,
     type: 3}
   FloorHolder: {fileID: 7615991529137408184, guid: b2f76cb87a58d844099251d41c2df6d2,
@@ -216,12 +217,13 @@ MonoBehaviour:
   PlotHeight: 50
   PlotWidth: 50
   MinRoomSize: 4
-  MaxRoomSize: 15
-  RoomNumber: 4
+  MaxRoomSize: 10
+  RoomNumber: 5
   FloorNumber: 2
   OutsideDoorNumber: 1
+  BalconyRoomNumber: 1
   WindowNumber: 3
-  RoofEnabled: 0
+  RoofEnabled: 1
   RandomWindowNumber: 1
 --- !u!1 &98989810
 GameObject:
