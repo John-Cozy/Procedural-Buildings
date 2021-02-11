@@ -6,6 +6,7 @@ using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.UI;
 using System.Linq;
+using UnityEditor.MemoryProfiler;
 
 public class Generator : MonoBehaviour {
 
@@ -25,10 +26,13 @@ public class Generator : MonoBehaviour {
 
     private bool showingMap = false;
 
+    private static int currentID = 0;
+
     // North, South, East, West, Up, Down
     private enum Direction { N, S, E, W, U, D }
 
-    private struct RoomConnection {
+    private class RoomConnection {
+        public string ID;
         public Direction direction;
         public Room roomStart;
         public Room roomEnd;
@@ -44,7 +48,7 @@ public class Generator : MonoBehaviour {
         // The room's dimensions
         private Bounds bounds;
 
-        // Any connections to other rooms this room has
+        // Any walls that have something blocking them
         private readonly Dictionary<Direction, bool> isDirectionBlocked = new Dictionary<Direction, bool> {
             { Direction.N, false },
             { Direction.S, false },
@@ -54,8 +58,8 @@ public class Generator : MonoBehaviour {
             { Direction.D, false }
         };
 
+        public string ID;
         public int Floor;
-
         public bool IsBalconyRoom = false;
 
         public float W      => bounds.min.x - BOUNDS_GAP;
@@ -72,7 +76,10 @@ public class Generator : MonoBehaviour {
         private static void AddRoom(Room room) {
             rooms[room.Floor].Add(room);
 
-            roomObjects[room.Floor].Add(Instantiate(Library.RoomHolder, floors[room.Floor].transform));
+            GameObject g = Instantiate(Library.RoomHolder, floors[room.Floor].transform);
+            g.name = room.ID;
+
+            roomObjects[room.Floor].Add(g);
         }
 
         public static void AddFirstRoom() {
@@ -82,6 +89,7 @@ public class Generator : MonoBehaviour {
             float height = RandomNumber(Settings.MinRoomSize, Settings.MaxRoomSize) - BOUNDS_GAP * 2;
 
             AddRoom(new Room {
+                ID = NewID(),
                 Floor = 0,
                 bounds = new Bounds(new Vector3(xPos, 0, zPos), new Vector3(width, 0, height))
             });
@@ -109,6 +117,7 @@ public class Generator : MonoBehaviour {
             foreach (Room r in rooms[floor - 1]) {
                 if (r.isDirectionBlocked[Direction.U] == false) {
                     Room newRoom = new Room {
+                        ID = NewID(),
                         Floor = floor,
                         bounds = new Bounds(new Vector3(r.X, floor, r.Z), new Vector3(r.Width, 0, r.Height))
                     };
@@ -116,7 +125,7 @@ public class Generator : MonoBehaviour {
                     newRoom.GenerateConnections();
 
                     newRoom.isDirectionBlocked[Direction.D] = true;
-                    r.isDirectionBlocked[Direction.U] = true;
+                          r.isDirectionBlocked[Direction.U] = true;
 
                     AddRoom(newRoom);
                 }
@@ -175,6 +184,7 @@ public class Generator : MonoBehaviour {
             }
 
             Room newRoom = new Room {
+                ID = NewID(),
                 Floor = floor,
                 bounds = new Bounds(new Vector3(xPos, floor, zPos), new Vector3(width, 0, height))
             };
@@ -203,8 +213,9 @@ public class Generator : MonoBehaviour {
             start.isDirectionBlocked[dir] = true;
 
             Room newRoom = new Room {
-                bounds = new Bounds(new Vector3(start.X, Settings.RoofHeight * (floor + 1), start.Z), start.bounds.size),
-                Floor = floor + 1
+                ID = NewID(),
+                Floor = floor + 1,
+                bounds = new Bounds(new Vector3(start.X, Settings.RoofHeight * (floor + 1), start.Z), start.bounds.size)
             };
 
             AddRoom(newRoom);
@@ -213,6 +224,7 @@ public class Generator : MonoBehaviour {
             newRoom.isDirectionBlocked[Direction.D] = true;
 
             connections[floor].Add(new RoomConnection {
+                ID = NewID(),
                 direction = Direction.U,
                 roomStart = start,
                 roomEnd = newRoom,
@@ -239,6 +251,52 @@ public class Generator : MonoBehaviour {
             r.IsBalconyRoom = true;
 
             return true;
+        }
+
+        private static List<RoomConnection> GetDoorConnections(Room r) {
+            List<RoomConnection> connectedRooms = new List<RoomConnection>();
+
+            foreach (RoomConnection c in connections[r.Floor]) {
+                if (c.direction != Direction.U && c.isEntranceValid) {
+                    if (c.roomStart == r || c.roomEnd == r) {
+                        connectedRooms.Add(c);
+                    }
+                }
+            }
+
+            return connectedRooms;
+        }
+
+        public static void PathFindDoorPlacements(int floor) {
+            List<string> visitedRooms = new List<string>();
+            List<string> traversedConnections = new List<string>();
+
+            // Getting first room
+            Room currentRoom = rooms[floor][0];
+
+            // Cycling through until all rooms are explored
+            while (visitedRooms.Count < rooms[floor].Count) {
+                if (!visitedRooms.Contains(currentRoom.ID)) visitedRooms.Add(currentRoom.ID);
+
+                List<RoomConnection> connectedRooms = GetDoorConnections(currentRoom);
+
+                foreach (RoomConnection c in connectedRooms) {
+                    Room adjacent = c.roomStart == currentRoom ? c.roomEnd : c.roomStart;
+                    
+                    // If other room has been visited & connection not already traversed, remove it
+                    if (visitedRooms.Contains(adjacent.ID) && !traversedConnections.Contains(c.ID)) {
+                        c.isEntranceValid = false;
+                    }
+                }
+
+                // Selecting random connection
+                int randomConnection = RandomNumber(0, connectedRooms.Count - 1);
+                RoomConnection connection = connectedRooms[randomConnection];
+                
+                // Marking connection traversed and moving to new room
+                if (!traversedConnections.Contains(connection.ID)) traversedConnections.Add(connection.ID);
+                currentRoom = connection.roomStart == currentRoom ? connection.roomEnd : connection.roomStart;
+            }
         }
 
         // - - - Validation - - - //
@@ -315,6 +373,7 @@ public class Generator : MonoBehaviour {
             adjacentRoom.isDirectionBlocked[ReverseDirection(dir)] = true;
 
             RoomConnection connection = new RoomConnection {
+                ID = NewID(),
                 direction = dir,
                 roomStart = this,
                 roomEnd = adjacentRoom,
@@ -394,22 +453,23 @@ public class Generator : MonoBehaviour {
 
     void Start() {
         GenerateAndPlaceRandomBuilding();
-
-        PrintRooms(0);
     }
 
     void Update() {
         if (Input.GetKeyDown("space")) {
             var stopwatch = new System.Diagnostics.Stopwatch();
 
+            currentID = 0;
+
             stopwatch.Start();
             GenerateAndPlaceRandomBuilding();
             stopwatch.Stop();
-            PrintRooms(1);
 
         } else if (Input.GetKeyDown("m")) {
             ToggleUI();
         } else if (Input.GetKeyDown("h")) {
+            currentID = 0;
+
             var stopwatch = new System.Diagnostics.Stopwatch();
 
             stopwatch.Start();
@@ -437,7 +497,7 @@ public class Generator : MonoBehaviour {
 
         for (int room = 0; room < Generator.rooms[floor].Count; room++) {
             Room r = Generator.rooms[floor][room];
-            rooms += "\n\nRoom " + (room + 1) + " - Height:" + r.Height + ", Width:" + r.Width
+            rooms += "\n\nRoom " + r.ID + " - Height:" + r.Height + ", Width:" + r.Width
                  + "\nW:" + r.W
                  + ", E:" + r.E
                  + ", N:" + r.N
@@ -448,9 +508,19 @@ public class Generator : MonoBehaviour {
                  + ", S:" + r.IsDirectionBlocked(Direction.S);
         }
 
-        rooms += "\n\nConnection Size: " + connections[0].Count;
-
         Map.text = rooms;
+    }
+
+    private void PrintConnections(int floor) {
+        string connections = "";
+
+        foreach (RoomConnection c in Generator.connections[floor]) {
+            connections += "\nStart: " + c.roomStart.ID + ", End: " + c.roomEnd.ID + ", Direction: " + c.direction + ", Valid: " + c.isEntranceValid;
+        }
+
+        connections += "\n\nConnection Size: " + Generator.connections[floor].Count;
+
+        Map.text = connections;
     }
 
     private void GenerateAndPlaceRandomBuilding() {
@@ -484,10 +554,13 @@ public class Generator : MonoBehaviour {
             Room.AddRandomRoom(0);
         }
 
+        if (Settings.PathfindDoors) Room.PathFindDoorPlacements(0);
+        
         for (int floor = 1; floor < Settings.FloorNumber; floor++) {
             Room.AddStairwellAndRoom(floor - 1);
             Room.AddRemainingRoomsOnFloor(floor);
             Room.MakeBalconyRoomsOnFloor(floor, Settings.BalconyRoomNumber);
+            if (Settings.PathfindDoors) Room.PathFindDoorPlacements(floor);
         }
     }
 
@@ -774,5 +847,10 @@ public class Generator : MonoBehaviour {
             default:
                 throw new InvalidEnumArgumentException();
         }
+    }
+
+    private static string NewID() {
+        currentID++;
+        return currentID - 1 + "";
     }
 }

@@ -15,6 +15,7 @@ public class Settings : MonoBehaviour {
 
     public bool RoofEnabled = false;
     public bool RandomWindowNumber = false;
+    public bool PathfindDoors = true;
 
     // Start is called before the first frame update
     void Start() {
