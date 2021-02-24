@@ -218,12 +218,12 @@ MonoBehaviour:
   PlotWidth: 50
   MinRoomSize: 4
   MaxRoomSize: 10
-  RoomNumber: 10
+  RoomNumber: 3
   FloorNumber: 1
   OutsideDoorNumber: 1
   BalconyRoomNumber: 1
   WindowNumber: 3
-  RoofEnabled: 0
+  RoofEnabled: 1
   RandomWindowNumber: 1
   PathfindDoors: 1
 --- !u!1 &98989810

@@ -1,12 +1,7 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.ComponentModel;
-using UnityEditor;
-using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Linq;
-using UnityEditor.MemoryProfiler;
 
 public class Generator : MonoBehaviour {
 
@@ -24,6 +19,8 @@ public class Generator : MonoBehaviour {
     private static List<GameObject>[] roomObjects;
     private static GameObject[] floors;
 
+    private static List<Roof> roofs;
+
     private bool showingMap = false;
 
     private static int currentID = 0;
@@ -32,13 +29,19 @@ public class Generator : MonoBehaviour {
     private enum Direction { N, S, E, W, U, D }
 
     private class RoomConnection {
-        public string ID;
-        public Direction direction;
-        public Room roomStart;
-        public Room roomEnd;
-        public bool isEntranceValid;
-        public Vector3 entrancePosition;
-        public Quaternion entranceRotation;
+        public string     ID;
+        public Direction  Direction;
+        public Room       RoomStart;
+        public Room       RoomEnd;
+        public bool       IsEntranceValid;
+        public Vector3    EntrancePosition;
+        public Quaternion EntranceRotation;
+    }
+
+    private class Roof {
+        public Quaternion Rotation;
+        public Vector3    Position;
+        public Vector3    Scale;
     }
 
     private class Room {
@@ -225,12 +228,12 @@ public class Generator : MonoBehaviour {
 
             connections[floor].Add(new RoomConnection {
                 ID = NewID(),
-                direction = Direction.U,
-                roomStart = start,
-                roomEnd = newRoom,
-                isEntranceValid = true,
-                entrancePosition = stairPosition,
-                entranceRotation = stairRotation
+                Direction = Direction.U,
+                RoomStart = start,
+                RoomEnd = newRoom,
+                IsEntranceValid = true,
+                EntrancePosition = stairPosition,
+                EntranceRotation = stairRotation
             });
 
             return true;
@@ -245,7 +248,7 @@ public class Generator : MonoBehaviour {
             Room r = rooms[floor][RandomNumber(0, rooms[floor].Count - 1)];
 
             foreach (RoomConnection c in connections[floor - 1]) {
-                if (c.roomEnd == r || r.IsBalconyRoom && r.IsAllDirectionsBlocked() != true) return false;
+                if (c.RoomEnd == r || r.IsBalconyRoom && r.IsAllDirectionsBlocked() != true) return false;
             }
 
             r.IsBalconyRoom = true;
@@ -253,12 +256,14 @@ public class Generator : MonoBehaviour {
             return true;
         }
 
-        private static List<RoomConnection> GetDoorConnections(Room r) {
+        // - - - Door Placements - - - //
+
+        public List<RoomConnection> GetDoorConnections() {
             List<RoomConnection> connectedRooms = new List<RoomConnection>();
 
-            foreach (RoomConnection c in connections[r.Floor]) {
-                if (c.direction != Direction.U && c.isEntranceValid) {
-                    if (c.roomStart == r || c.roomEnd == r) {
+            foreach (RoomConnection c in connections[Floor]) {
+                if (c.Direction != Direction.U && c.IsEntranceValid) {
+                    if (c.RoomStart == this || c.RoomEnd == this) {
                         connectedRooms.Add(c);
                     }
                 }
@@ -278,14 +283,14 @@ public class Generator : MonoBehaviour {
             while (visitedRooms.Count < rooms[floor].Count) {
                 if (!visitedRooms.Contains(currentRoom.ID)) visitedRooms.Add(currentRoom.ID);
 
-                List<RoomConnection> connectedRooms = GetDoorConnections(currentRoom);
+                List<RoomConnection> connectedRooms = currentRoom.GetDoorConnections();
 
                 foreach (RoomConnection c in connectedRooms) {
-                    Room adjacent = c.roomStart == currentRoom ? c.roomEnd : c.roomStart;
+                    Room adjacent = c.RoomStart == currentRoom ? c.RoomEnd : c.RoomStart;
                     
                     // If other room has been visited & connection not already traversed, remove it
                     if (visitedRooms.Contains(adjacent.ID) && !traversedConnections.Contains(c.ID)) {
-                        c.isEntranceValid = false;
+                        c.IsEntranceValid = false;
                     }
                 }
 
@@ -295,7 +300,7 @@ public class Generator : MonoBehaviour {
                 
                 // Marking connection traversed and moving to new room
                 if (!traversedConnections.Contains(connection.ID)) traversedConnections.Add(connection.ID);
-                currentRoom = connection.roomStart == currentRoom ? connection.roomEnd : connection.roomStart;
+                currentRoom = connection.RoomStart == currentRoom ? connection.RoomEnd : connection.RoomStart;
             }
         }
 
@@ -338,10 +343,10 @@ public class Generator : MonoBehaviour {
             foreach (Room nextRoom in rooms[Floor]) {
 
                 // Check that the walls are lined up and that the rooms are adjacent to one another
-                     if (FloatsEqual(nextRoom.S, N) && FloatLessNotEqual(nextRoom.W, E) && FloatLessNotEqual(W, nextRoom.E)) AddDoorConnection(nextRoom, Direction.N);
-                else if (FloatsEqual(nextRoom.N, S) && FloatLessNotEqual(nextRoom.W, E) && FloatLessNotEqual(W, nextRoom.E)) AddDoorConnection(nextRoom, Direction.S);
-                else if (FloatsEqual(nextRoom.E, W) && FloatLessNotEqual(nextRoom.N, S) && FloatLessNotEqual(N, nextRoom.S)) AddDoorConnection(nextRoom, Direction.W);
-                else if (FloatsEqual(nextRoom.W, E) && FloatLessNotEqual(nextRoom.N, S) && FloatLessNotEqual(N, nextRoom.S)) AddDoorConnection(nextRoom, Direction.E);
+                     if (Equal(nextRoom.S, N) && LessNotEqual(nextRoom.W, E) && LessNotEqual(W, nextRoom.E)) AddDoorConnection(nextRoom, Direction.N);
+                else if (Equal(nextRoom.N, S) && LessNotEqual(nextRoom.W, E) && LessNotEqual(W, nextRoom.E)) AddDoorConnection(nextRoom, Direction.S);
+                else if (Equal(nextRoom.E, W) && LessNotEqual(nextRoom.N, S) && LessNotEqual(N, nextRoom.S)) AddDoorConnection(nextRoom, Direction.W);
+                else if (Equal(nextRoom.W, E) && LessNotEqual(nextRoom.N, S) && LessNotEqual(N, nextRoom.S)) AddDoorConnection(nextRoom, Direction.E);
             }
         }
 
@@ -374,12 +379,12 @@ public class Generator : MonoBehaviour {
 
             RoomConnection connection = new RoomConnection {
                 ID = NewID(),
-                direction = dir,
-                roomStart = this,
-                roomEnd = adjacentRoom,
-                isEntranceValid = isDoorValid,
-                entrancePosition = doorPosition,
-                entranceRotation = doorRotation
+                Direction = dir,
+                RoomStart = this,
+                RoomEnd = adjacentRoom,
+                IsEntranceValid = isDoorValid,
+                EntrancePosition = doorPosition,
+                EntranceRotation = doorRotation
             };
 
             connections[Floor].Add(connection);
@@ -388,7 +393,7 @@ public class Generator : MonoBehaviour {
 
         private bool IsConnectionAlreadyAdded(Room room) {
             foreach (RoomConnection c in connections[Floor]) {
-                if ((this == c.roomStart && room == c.roomEnd) || (room == c.roomStart && this == c.roomEnd)) {
+                if ((this == c.RoomStart && room == c.RoomEnd) || (room == c.RoomStart && this == c.RoomEnd)) {
                     return true;
                 }
             }
@@ -400,7 +405,7 @@ public class Generator : MonoBehaviour {
             for (int room = 0; room < connections[Floor].Count; room++) {
                 RoomConnection c = connections[Floor][room];
                 
-                if (this == c.roomEnd || this == c.roomStart) { 
+                if (this == c.RoomEnd || this == c.RoomStart) { 
                     connections[Floor].Remove(c);
                     room--;
                 }
@@ -444,6 +449,138 @@ public class Generator : MonoBehaviour {
                 && isDirectionBlocked[Direction.E]
                 && isDirectionBlocked[Direction.W];
         }
+    }
+
+
+    // - - - Roof Placements - - - //
+
+    private static void GenerateRoofing() {
+        List<Room> roomsToBeRoofed = new List<Room>();
+
+        // Get rooms that need a roof
+        for (int i = 0; i < rooms.Length; i++) {
+            foreach (Room r in rooms[i]) {
+                if (r.IsDirectionBlocked(Direction.U) != true) {
+                    roomsToBeRoofed.Add(r);
+                }
+            }
+        }
+
+        // Loop through rooms to be roofed and add relevant roofing
+        while (roomsToBeRoofed.Count > 0) {
+            Room r = roomsToBeRoofed[0];
+
+            // Check whether it's not on the top floor
+            if (r.Floor < rooms.Length - 1) {
+                Roof roof = GetStandardRoofForRoom(r);
+                roofs.Add(roof);
+
+                roomsToBeRoofed.RemoveAt(0);
+
+            // Roof on the top floor
+            } else {
+                List<Room> roomsPartOfRoof = new List<Room>();
+
+                roomsToBeRoofed.Remove(r);
+                roomsPartOfRoof.Add(r);
+
+                Direction roofDirection = Direction.U;
+
+                foreach (RoomConnection c in r.GetDoorConnections()) {
+                    Room adj = c.RoomStart == r ? c.RoomEnd : c.RoomStart;
+
+                    if (Equal(r.Width, adj.Width) || Equal(r.Height, adj.Height)) {
+                        if (roomsToBeRoofed.Contains(adj)) {
+                            roomsToBeRoofed.Remove(adj);
+                            roomsPartOfRoof.Add(adj);
+
+                            roofDirection = c.RoomStart == r ? c.Direction : ReverseDirection(c.Direction);
+
+                            IsRoomSameWidthOrHeightInDirection(adj, roomsToBeRoofed, roomsPartOfRoof, roofDirection);
+                            break;
+                        }
+                    }
+                }
+
+                // No adjacent rooms found with same width/height that need roofing
+                if (roomsPartOfRoof.Count <= 1) {
+                    Roof roof = GetStandardRoofForRoom(r);
+                    roofs.Add(roof);
+
+                } else {
+                    bool horizontal = roofDirection == Direction.E || roofDirection == Direction.W ? true : false;
+                    //bool ascending = r.GetWallPosition(roofDirection) > r.GetWallPosition(ReverseDirection(roofDirection));
+
+                    float top = roomsPartOfRoof[0].GetWallPosition(ReverseDirection(roofDirection));
+                    float bottom = roomsPartOfRoof[roomsPartOfRoof.Count - 1].GetWallPosition(roofDirection);
+
+                    // Sorting position
+                    Vector3 position = new Vector3() {
+                        x = horizontal ? (top + bottom) / 2 : r.X,
+                        z = horizontal ? r.Z : (top + bottom) / 2,
+                        y = Settings.RoofHeight * (r.Floor + 1)
+                    };
+
+                    // Sorting scale
+                    float length = 0;
+
+                    foreach (Room room in roomsPartOfRoof) {
+                        length += horizontal ? room.Width : room.Height;
+                    }
+
+                    Vector3 scale = new Vector3() {
+                        x = horizontal ? r.Height : r.Width,
+                        y = 1,
+                        z = length
+                    };
+
+                    // Sorting rotation
+                    Quaternion rotation = Rotation(roofDirection) * Quaternion.Euler(0,90,0);
+
+                    Roof roof = new Roof {
+                        Position = position,
+                        Rotation = rotation,
+                        Scale    = scale
+                    };
+
+                    roofs.Add(roof);
+                }
+            }
+        }
+    }
+
+    private static void IsRoomSameWidthOrHeightInDirection(Room r, List<Room> roomsToBeRoofed, List<Room> roomsPartOfRoof, Direction dir) {
+        foreach (RoomConnection c in r.GetDoorConnections()) {
+            if (c.Direction == dir || c.Direction == ReverseDirection(dir)) {
+                Room adj = c.RoomStart == r ? c.RoomEnd : c.RoomStart;
+
+                if (Equal(r.Width, adj.Width) || Equal(r.Height, adj.Height)) {
+                    if (roomsToBeRoofed.Contains(adj)) {
+                        roomsPartOfRoof.Add(adj);
+                        roomsToBeRoofed.Remove(adj);
+
+                        IsRoomSameWidthOrHeightInDirection(r, roomsToBeRoofed, roomsPartOfRoof, dir);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private static Roof GetStandardRoofForRoom(Room r) {
+        Roof roof = new Roof {
+            Position = new Vector3(r.X, Settings.RoofHeight * (r.Floor + 1), r.Z)
+    };
+
+        if (r.Width > r.Height) {
+            roof.Rotation = Rotation(Direction.N);
+            roof.Scale = new Vector3(r.Height, 1, r.Width);
+        } else {
+            roof.Rotation = Rotation(Direction.E);
+            roof.Scale = new Vector3(r.Width, 1, r.Height);
+        }
+
+        return roof;
     }
 
     void Awake() {
@@ -515,7 +652,7 @@ public class Generator : MonoBehaviour {
         string connections = "";
 
         foreach (RoomConnection c in Generator.connections[floor]) {
-            connections += "\nStart: " + c.roomStart.ID + ", End: " + c.roomEnd.ID + ", Direction: " + c.direction + ", Valid: " + c.isEntranceValid;
+            connections += "\nStart: " + c.RoomStart.ID + ", End: " + c.RoomEnd.ID + ", Direction: " + c.Direction + ", Valid: " + c.IsEntranceValid;
         }
 
         connections += "\n\nConnection Size: " + Generator.connections[floor].Count;
@@ -540,6 +677,7 @@ public class Generator : MonoBehaviour {
         roomObjects = new List<GameObject>[Settings.FloorNumber];
         connections = new List<RoomConnection>[Settings.FloorNumber];
         floors = new GameObject[Settings.FloorNumber];
+        roofs = new List<Roof>();
 
         for (int floor = 0; floor < Settings.FloorNumber; floor++) {
             rooms[floor] = new List<Room>();
@@ -562,6 +700,8 @@ public class Generator : MonoBehaviour {
             Room.MakeBalconyRoomsOnFloor(floor, Settings.BalconyRoomNumber);
             if (Settings.PathfindDoors) Room.PathFindDoorPlacements(floor);
         }
+
+        if (Settings.RoofEnabled) GenerateRoofing();
     }
 
     private void PlaceFloorPlan() {
@@ -575,7 +715,6 @@ public class Generator : MonoBehaviour {
 
                 if (r.IsBalconyRoom == false) {
                     PlaceRoomFloor(r, g, floor, room);
-                    if (Settings.RoofEnabled && r.IsDirectionBlocked(Direction.U) == false) PlaceRoomRoof(r, g, floor, room);
                     PlaceRoomCorners(r, g);
                     PlaceRoomWalls(r, g);
                     PlaceRoomWindows(r, g);
@@ -588,16 +727,17 @@ public class Generator : MonoBehaviour {
 
             PlaceFloorDoorsAndStairs(floor);
         }
+
+        if (Settings.RoofEnabled) {
+            foreach (Roof r in roofs) {
+                PlaceRoof(r);
+            }
+        }
     }
 
     private void PlaceRoomFloor(Room r, GameObject g, int floor, int room) {
         GameObject floorObj = Instantiate(Library.Floor, new Vector3(r.X, Settings.RoofHeight * floor, r.Z), Quaternion.identity, g.transform);
         floorObj.transform.localScale = new Vector3(r.Width, 0.2f + (room * 0.001f), r.Height);
-    }
-
-    private void PlaceRoomRoof(Room r, GameObject g, int floor, int room) {
-        GameObject roofObj = Instantiate(Library.Roof, new Vector3(r.X, Settings.RoofHeight * (floor + 1), r.Z), Quaternion.identity, g.transform);
-        roofObj.transform.localScale = new Vector3(r.Width, 0.2f + (room * 0.001f), r.Height);
     }
 
     private void PlaceRoomCorners(Room r, GameObject g) {
@@ -667,15 +807,15 @@ public class Generator : MonoBehaviour {
 
     private void PlaceFloorDoorsAndStairs(int floor) {
         foreach (RoomConnection c in connections[floor]) {
-            if (c.isEntranceValid && c.direction != Direction.U) {
-                GameObject room = roomObjects[floor][rooms[floor].IndexOf(c.roomStart)];
+            if (c.IsEntranceValid && c.Direction != Direction.U) {
+                GameObject room = roomObjects[floor][rooms[floor].IndexOf(c.RoomStart)];
 
-                PlaceDoor(c.entrancePosition, c.entranceRotation, false, room);
+                PlaceDoor(c.EntrancePosition, c.EntranceRotation, false, room);
 
-            } else if (c.isEntranceValid && c.direction == Direction.U) {
-                GameObject room = roomObjects[floor][rooms[floor].IndexOf(c.roomStart)];
+            } else if (c.IsEntranceValid && c.Direction == Direction.U) {
+                GameObject room = roomObjects[floor][rooms[floor].IndexOf(c.RoomStart)];
 
-                PlaceStairs(c.entrancePosition, c.entranceRotation, room);
+                PlaceStairs(c.EntrancePosition, c.EntranceRotation, room);
             }
         }
     }
@@ -696,6 +836,11 @@ public class Generator : MonoBehaviour {
             r.BlockDirection(dir);
             doorCount++;
         }
+    }
+
+    private void PlaceRoof(Roof r) {
+        GameObject roofObj = Instantiate(Library.Roof, r.Position + new Vector3(0, .1f, 0), r.Rotation, Plot);
+        roofObj.transform.localScale = r.Scale;
     }
 
     private void PlaceGrass() {
@@ -758,16 +903,16 @@ public class Generator : MonoBehaviour {
         return Settings.PlotHeight;
     }
 
-    private static bool FloatsEqual(float float1, float float2) {
+    private static bool Equal(float float1, float float2) {
         return System.Math.Abs(float1 - float2) < 0.01f;
     }
 
-    private static bool FloatGreaterNotEqual(float float1, float float2) {
-        return float1 > float2 && !FloatsEqual(float1, float2);
+    private static bool GreaterNotEqual(float float1, float float2) {
+        return float1 > float2 && !Equal(float1, float2);
     }
 
-    private static bool FloatLessNotEqual(float float1, float float2) {
-        return float1 < float2 && !FloatsEqual(float1, float2);
+    private static bool LessNotEqual(float float1, float float2) {
+        return float1 < float2 && !Equal(float1, float2);
     }
 
     private static Direction ReverseDirection(Direction dir) {
