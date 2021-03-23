@@ -5,10 +5,9 @@ using UnityEngine.UI;
 
 public class Generator : MonoBehaviour {
 
-    public Text Map;
-    public Text Stats;
-    public CanvasGroup UI;
     public Transform Plot;
+
+    public static Generator Singleton;
 
     private static PrefabLibrary Library;
     private static Settings Settings;
@@ -20,8 +19,6 @@ public class Generator : MonoBehaviour {
     private static GameObject[] floors;
 
     private static List<Roof> roofs;
-
-    private bool showingMap = false;
 
     private static int currentID = 0;
 
@@ -42,6 +39,7 @@ public class Generator : MonoBehaviour {
         public Quaternion Rotation;
         public Vector3    Position;
         public Vector3    Scale;
+        public int        Floor;
     }
 
     private class Room {
@@ -98,26 +96,40 @@ public class Generator : MonoBehaviour {
             });
         }
 
-        public static void AddRandomRoom(int floor) {
+        public static void AddRandomGroundRoom() {
             bool successfulRoomPlaced;
 
+            int count = 0;
             while (true) {
-                successfulRoomPlaced = floor == 0 ? TryToAddRandomGroundFloorRoom() : TryToAddRandomUpperFloorRoom(floor);
+                successfulRoomPlaced = TryToAddRandomGroundFloorRoom();
                 if (successfulRoomPlaced) break;
+
+                count++;
+                if (count == 1000) {
+                    Debug.Log("Error in adding stairwell");
+                }
             }
         }
 
         public static void AddStairwellAndRoom(int floor) {
             bool successfulRoomPlaced;
 
+            int count = 0;
             while (true) {
                 successfulRoomPlaced = TryToAddStairwellAndRoom(floor);
                 if (successfulRoomPlaced) break;
+
+                count++;
+                if (count == 1000) {
+                    Debug.Log("Error in adding stairwell");
+                }
             }
         }
 
         public static void AddRemainingRoomsOnFloor(int floor) {
-            foreach (Room r in rooms[floor - 1]) {
+            for (int i = 0; i < rooms[floor - 1].Count - Settings.RemoveRoomNum; i++) {
+                Room r = rooms[floor - 1][i];
+
                 if (r.isDirectionBlocked[Direction.U] == false) {
                     Room newRoom = new Room {
                         ID = NewID(),
@@ -136,8 +148,13 @@ public class Generator : MonoBehaviour {
         }
 
         public static void MakeBalconyRoomsOnFloor(int floor, int numberOfRooms) {
+            int count = 0;
             for (int i = 0; i < numberOfRooms; i++) {
                 if (TryToChangeRandomRoomToBalcony(floor) != true) i--;
+                count++;
+                if (count == 1000) {
+                    Debug.Log("Error in making balcony place");
+                }
             }
         }
 
@@ -239,11 +256,6 @@ public class Generator : MonoBehaviour {
             return true;
         }
 
-        private static bool TryToAddRandomUpperFloorRoom(int floor) {
-            
-            return false; 
-        }
-
         private static bool TryToChangeRandomRoomToBalcony(int floor) {
             Room r = rooms[floor][RandomNumber(0, rooms[floor].Count - 1)];
 
@@ -251,57 +263,10 @@ public class Generator : MonoBehaviour {
                 if (c.RoomEnd == r || r.IsBalconyRoom && r.IsAllDirectionsBlocked() != true) return false;
             }
 
+            r.BlockDirection(Direction.U);
             r.IsBalconyRoom = true;
 
             return true;
-        }
-
-        // - - - Door Placements - - - //
-
-        public List<RoomConnection> GetDoorConnections() {
-            List<RoomConnection> connectedRooms = new List<RoomConnection>();
-
-            foreach (RoomConnection c in connections[Floor]) {
-                if (c.Direction != Direction.U && c.IsEntranceValid) {
-                    if (c.RoomStart == this || c.RoomEnd == this) {
-                        connectedRooms.Add(c);
-                    }
-                }
-            }
-
-            return connectedRooms;
-        }
-
-        public static void PathFindDoorPlacements(int floor) {
-            List<string> visitedRooms = new List<string>();
-            List<string> traversedConnections = new List<string>();
-
-            // Getting first room
-            Room currentRoom = rooms[floor][0];
-
-            // Cycling through until all rooms are explored
-            while (visitedRooms.Count < rooms[floor].Count) {
-                if (!visitedRooms.Contains(currentRoom.ID)) visitedRooms.Add(currentRoom.ID);
-
-                List<RoomConnection> connectedRooms = currentRoom.GetDoorConnections();
-
-                foreach (RoomConnection c in connectedRooms) {
-                    Room adjacent = c.RoomStart == currentRoom ? c.RoomEnd : c.RoomStart;
-                    
-                    // If other room has been visited & connection not already traversed, remove it
-                    if (visitedRooms.Contains(adjacent.ID) && !traversedConnections.Contains(c.ID)) {
-                        c.IsEntranceValid = false;
-                    }
-                }
-
-                // Selecting random connection
-                int randomConnection = RandomNumber(0, connectedRooms.Count - 1);
-                RoomConnection connection = connectedRooms[randomConnection];
-                
-                // Marking connection traversed and moving to new room
-                if (!traversedConnections.Contains(connection.ID)) traversedConnections.Add(connection.ID);
-                currentRoom = connection.RoomStart == currentRoom ? connection.RoomEnd : connection.RoomStart;
-            }
         }
 
         // - - - Validation - - - //
@@ -411,7 +376,62 @@ public class Generator : MonoBehaviour {
                 }
             }
         }
-        
+
+        // - - - Door Placements - - - //
+
+        public List<RoomConnection> GetDoorConnections() {
+            List<RoomConnection> connectedRooms = new List<RoomConnection>();
+
+            foreach (RoomConnection c in connections[Floor]) {
+                if (c.Direction != Direction.U && c.IsEntranceValid) {
+                    if (c.RoomStart == this || c.RoomEnd == this) {
+                        connectedRooms.Add(c);
+                    }
+                }
+            }
+
+            return connectedRooms;
+        }
+
+        public static void PathFindDoorPlacements(int floor) {
+            List<string> visitedRooms = new List<string>();
+            List<string> traversedConnections = new List<string>();
+
+            // Getting first room
+            Room currentRoom = rooms[floor][0];
+
+            int count = 0;
+
+            // Cycling through until all rooms are explored
+            while (visitedRooms.Count < rooms[floor].Count) {
+                if (!visitedRooms.Contains(currentRoom.ID)) visitedRooms.Add(currentRoom.ID);
+
+                List<RoomConnection> connectedRooms = currentRoom.GetDoorConnections();
+
+                foreach (RoomConnection c in connectedRooms) {
+                    Room adjacent = c.RoomStart == currentRoom ? c.RoomEnd : c.RoomStart;
+
+                    // If other room has been visited & connection not already traversed, remove it
+                    if (visitedRooms.Contains(adjacent.ID) && !traversedConnections.Contains(c.ID)) {
+                        c.IsEntranceValid = false;
+                    }
+                }
+
+                // Selecting random connection
+                int randomConnection = RandomNumber(0, connectedRooms.Count - 1);
+                RoomConnection connection = connectedRooms[randomConnection];
+
+                // Marking connection traversed and moving to new room
+                if (!traversedConnections.Contains(connection.ID)) traversedConnections.Add(connection.ID);
+                currentRoom = connection.RoomStart == currentRoom ? connection.RoomEnd : connection.RoomStart;
+
+                count++;
+                if (count == 1000) {
+                    Debug.Log("Error in Door placements");
+                }
+            }
+        }
+
         // - - - Walls - - - //
 
         public float GetWallPosition(Direction dir) {
@@ -450,7 +470,12 @@ public class Generator : MonoBehaviour {
                 && isDirectionBlocked[Direction.W];
         }
     }
-
+    
+    void Awake() {
+        Library = GetComponent<PrefabLibrary>();
+        Settings = GetComponent<Settings>();
+        Singleton = this;
+    }
 
     // - - - Roof Placements - - - //
 
@@ -465,6 +490,8 @@ public class Generator : MonoBehaviour {
                 }
             }
         }
+
+        int count = 0;
 
         // Loop through rooms to be roofed and add relevant roofing
         while (roomsToBeRoofed.Count > 0) {
@@ -540,11 +567,17 @@ public class Generator : MonoBehaviour {
                     Roof roof = new Roof {
                         Position = position,
                         Rotation = rotation,
-                        Scale    = scale
+                        Scale    = scale,
+                        Floor    = r.Floor
                     };
 
                     roofs.Add(roof);
                 }
+            }
+
+            count++;
+            if (count == 1000) {
+                Debug.Log("Error in making roofs");
             }
         }
     }
@@ -554,6 +587,7 @@ public class Generator : MonoBehaviour {
             if (c.Direction == dir || c.Direction == ReverseDirection(dir)) {
                 Room adj = c.RoomStart == r ? c.RoomEnd : c.RoomStart;
 
+                // Either the width or the height is equal to extend roof to encompass new building
                 if (Equal(r.Width, adj.Width) || Equal(r.Height, adj.Height)) {
                     if (roomsToBeRoofed.Contains(adj)) {
                         roomsPartOfRoof.Add(adj);
@@ -569,8 +603,9 @@ public class Generator : MonoBehaviour {
 
     private static Roof GetStandardRoofForRoom(Room r) {
         Roof roof = new Roof {
-            Position = new Vector3(r.X, Settings.RoofHeight * (r.Floor + 1), r.Z)
-    };
+            Position = new Vector3(r.X, Settings.RoofHeight * (r.Floor + 1), r.Z),
+            Floor = r.Floor
+        };
 
         if (r.Width > r.Height) {
             roof.Rotation = Rotation(Direction.N);
@@ -583,84 +618,7 @@ public class Generator : MonoBehaviour {
         return roof;
     }
 
-    void Awake() {
-        Library = GetComponent<PrefabLibrary>();
-        Settings = GetComponent<Settings>();
-    }
-
-    void Start() {
-        GenerateAndPlaceRandomBuilding();
-    }
-
-    void Update() {
-        if (Input.GetKeyDown("space")) {
-            var stopwatch = new System.Diagnostics.Stopwatch();
-
-            currentID = 0;
-
-            stopwatch.Start();
-            GenerateAndPlaceRandomBuilding();
-            stopwatch.Stop();
-
-        } else if (Input.GetKeyDown("m")) {
-            ToggleUI();
-        } else if (Input.GetKeyDown("h")) {
-            currentID = 0;
-
-            var stopwatch = new System.Diagnostics.Stopwatch();
-
-            stopwatch.Start();
-            for (int i = 0; i < 30; i++) GenerateAndPlaceRandomBuilding();
-            stopwatch.Stop();
-
-            Stats.text = "Time: " + stopwatch.ElapsedMilliseconds + "ms";
-        }
-    }
-
-    private void ToggleUI() {
-        if (showingMap) {
-            UI.alpha = 0f;
-            UI.blocksRaycasts = false;
-            showingMap = false;
-        } else {
-            UI.alpha = 1f;
-            UI.blocksRaycasts = true;
-            showingMap = true;
-        }
-    }
-
-    private void PrintRooms(int floor) {
-        string rooms = "";
-
-        for (int room = 0; room < Generator.rooms[floor].Count; room++) {
-            Room r = Generator.rooms[floor][room];
-            rooms += "\n\nRoom " + r.ID + " - Height:" + r.Height + ", Width:" + r.Width
-                 + "\nW:" + r.W
-                 + ", E:" + r.E
-                 + ", N:" + r.N
-                 + ", S:" + r.S
-                 + "\nW:" + r.IsDirectionBlocked(Direction.W)
-                 + ", E:" + r.IsDirectionBlocked(Direction.E)
-                 + ", N:" + r.IsDirectionBlocked(Direction.N)
-                 + ", S:" + r.IsDirectionBlocked(Direction.S);
-        }
-
-        Map.text = rooms;
-    }
-
-    private void PrintConnections(int floor) {
-        string connections = "";
-
-        foreach (RoomConnection c in Generator.connections[floor]) {
-            connections += "\nStart: " + c.RoomStart.ID + ", End: " + c.RoomEnd.ID + ", Direction: " + c.Direction + ", Valid: " + c.IsEntranceValid;
-        }
-
-        connections += "\n\nConnection Size: " + Generator.connections[floor].Count;
-
-        Map.text = connections;
-    }
-
-    private void GenerateAndPlaceRandomBuilding() {
+    public void GenerateAndPlaceRandomBuilding() {
         DeleteChildren();
         GenerateRooms();
         PlaceFloorPlan();
@@ -679,34 +637,49 @@ public class Generator : MonoBehaviour {
         floors = new GameObject[Settings.FloorNumber];
         roofs = new List<Roof>();
 
+        //Debug.Log("1");
+
         for (int floor = 0; floor < Settings.FloorNumber; floor++) {
             rooms[floor] = new List<Room>();
             roomObjects[floor] = new List<GameObject>();
             connections[floor] = new List<RoomConnection>();
+
             floors[floor] = Instantiate(Library.FloorHolder, Plot);
+            floors[floor].name = "Floor " + floor;
+            floors[floor].tag = "Floor";
         }
+
+        //Debug.Log("2");
 
         Room.AddFirstRoom();
 
         for (int i = 1; i < Settings.RoomNumber; i++) {
-            Room.AddRandomRoom(0);
+            Room.AddRandomGroundRoom();
         }
 
+        //Debug.Log("3");
+
         if (Settings.PathfindDoors) Room.PathFindDoorPlacements(0);
-        
+
+        //Debug.Log("4");
+
         for (int floor = 1; floor < Settings.FloorNumber; floor++) {
             Room.AddStairwellAndRoom(floor - 1);
             Room.AddRemainingRoomsOnFloor(floor);
-            Room.MakeBalconyRoomsOnFloor(floor, Settings.BalconyRoomNumber);
             if (Settings.PathfindDoors) Room.PathFindDoorPlacements(floor);
         }
+
+        //Debug.Log("5");
+
+        // Make balcony rooms on top floor
+        Room.MakeBalconyRoomsOnFloor(Settings.FloorNumber - 1, Settings.BalconyRoomNum);
 
         if (Settings.RoofEnabled) GenerateRoofing();
     }
 
     private void PlaceFloorPlan() {
         PlaceGrass();
-        PlaceOutsideDoors(Settings.OutsideDoorNumber);
+        PlaceOutsideDoors(Settings.OutsideDoorNum);
 
         for (int floor = 0; floor < Settings.FloorNumber; floor++) {
             for (int room = 0; room < rooms[floor].Count; room++) {
@@ -761,10 +734,10 @@ public class Generator : MonoBehaviour {
     private void PlaceRoomWindows(Room r, GameObject g) {
         float yPos = Settings.WallHeight + (Settings.RoofHeight * r.Floor);
 
-        int windowNumberX = Settings.WindowNumber < r.Width  ? Settings.WindowNumber : (int) r.Width  - 1;
-        int windowNumberZ = Settings.WindowNumber < r.Height ? Settings.WindowNumber : (int) r.Height - 1;
+        int windowNumberX = Settings.WindowNum < r.Width  ? Settings.WindowNum : (int) r.Width  - 1;
+        int windowNumberZ = Settings.WindowNum < r.Height ? Settings.WindowNum : (int) r.Height - 1;
 
-        if (Settings.RandomWindowNumber) {
+        if (Settings.RandomiseWindows) {
             windowNumberX = RandomNumber(1, windowNumberX);
             windowNumberZ = RandomNumber(1, windowNumberZ);
         }
@@ -841,6 +814,8 @@ public class Generator : MonoBehaviour {
     private void PlaceRoof(Roof r) {
         GameObject roofObj = Instantiate(Library.Roof, r.Position + new Vector3(0, .1f, 0), r.Rotation, Plot);
         roofObj.transform.localScale = r.Scale;
+        roofObj.name = "Floor " + r.Floor + " Roof";
+        roofObj.tag = "Roof";
     }
 
     private void PlaceGrass() {
@@ -997,5 +972,13 @@ public class Generator : MonoBehaviour {
     private static string NewID() {
         currentID++;
         return currentID - 1 + "";
+    }
+
+    public static void ResetID() {
+        currentID = 0;
+    }
+
+    public static int GetFloorNumber() {
+        return rooms.Length;
     }
 }

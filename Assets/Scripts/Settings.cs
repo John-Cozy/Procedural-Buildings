@@ -3,27 +3,30 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class Settings : MonoBehaviour {
-    public float WallHeight = 1.4f, RoofHeight = 3.0f;
+    [Header("Building Height")]
+    public float WallHeight = 1.4f;
+    public float RoofHeight = 3.0f;
 
-    public int PlotHeight = 50, PlotWidth = 50;
+    [Header("Plot & Building Size")]
+    public int PlotHeight = 50;
+    public int PlotWidth = 50;
     public int MinRoomSize = 4, MaxRoomSize = 15;
     public int RoomNumber = 4, FloorNumber = 2;
 
-    public int OutsideDoorNumber = 1;
-    public int BalconyRoomNumber = 1;
-    public int WindowNumber = 1;
+    [Header("Building Features")]
+    public int OutsideDoorNum = 1;
+    public int BalconyRoomNum = 1;
+    public int RemoveRoomNum = 0;
+    public int WindowNum = 1;
 
+    [Header("Additional Settings")]
     public bool RoofEnabled = false;
-    public bool RandomWindowNumber = false;
+    public bool RandomiseWindows = false;
     public bool PathfindDoors = true;
 
-    // Start is called before the first frame update
-    void Start() {
-        
-    }
+    public static Settings Singleton;
 
-    // Update is called once per frame
-    void Update() {
-        
+    void Start() {
+        Singleton = this;
     }
 }
